@@ -8,11 +8,26 @@ import requests
 from pydantic import PydanticSchemaGenerationError, BaseModel, ValidationError
 from requests import ConnectTimeout
 
-from api_client.dataclasses import PqExperiment, PqTestResultsList
-from api_client.exceptions import (
+from src.api_client.dataclasses import PqExperiment, PqTestResultsList
+from src.api_client.exceptions import (
     PqSerializationException, PqExperimentAlreadyExistsException, PqExperimentSetupException,
-    PqExperimentSampleUploadException
+    PqExperimentSampleUploadException, PqSampleNotFoundError
 )
+
+
+class IncorrectLogin(Exception):
+    def __init__(self) -> None:
+        super().__init__("Incorrect login or password!")
+
+
+class NotAuthorisedError(Exception):
+    def __init__(self):
+        super().__init__("Not authorized, log in first")
+
+
+class DetailedError(Exception):
+    def __init__(self, content):
+        super().__init__(str(content))
 
 
 class PqToolkitAPIClient:
@@ -26,10 +41,12 @@ class PqToolkitAPIClient:
         base_port: The port of the API.
     """
 
-    def __init__(self, *, base_host: str = "http://localhost", base_port: int = 3000):
+    def __init__(self, *, base_host: str = "http://localhost", base_port: int = 8000, api_version: str = "v1", login=None, password=None):
         self._base_host = base_host
         self._base_port = base_port
-        self._endpoint = f"{self._base_host}:{self._base_port}/api/v1"
+        self._oauth_token = None
+        self._oauth_id = None
+        self._endpoint = f"{self._base_host}:{self._base_port}/api/{api_version}"
 
         response = self._get("/status",)
         status = response.json().get("status")
@@ -37,9 +54,16 @@ class PqToolkitAPIClient:
             raise ConnectionError(f"Cannot read status from {self._endpoint}")
         logging.info(f"Connected to {self._endpoint}, status: HEALTHY")
 
-    @staticmethod
-    def _request(**kwargs):
+        if login and password:
+            self.log_in(login, password)
+
+    def _request(self, **kwargs):
         try:
+            if self.is_logged_in:
+                if not "headers" in kwargs:
+                    kwargs["headers"] = {}
+                kwargs["headers"]["Authorization"] = self._auth_token
+
             response = requests.request(timeout=2.0, **kwargs)
             return response
         except ConnectTimeout:
@@ -117,6 +141,33 @@ class PqToolkitAPIClient:
 
         return wrapper
 
+    @property
+    def _auth_token(self):
+        return f"{self._oauth_id} {self._oauth_token}"
+
+    def log_in(self, username, password):
+        data = {
+            "username": username,
+            "password": password
+        }
+        resp = self._post("/auth/login", data=data)
+
+        match resp.status_code:
+            case 200:
+                pass
+            case _:
+                raise IncorrectLogin()
+        resp = resp.json()
+        self._oauth_token = resp["access_token"]
+        self._oauth_id = resp["token_type"]
+
+    def get_user(self):
+        return self._get("/auth/user").json()
+
+    @property
+    def is_logged_in(self):
+        return (self._oauth_id and self._oauth_token)
+
     def get_experiments(self) -> list[str]:
         """
         Method allows to get a list of all experiments currently defined.
@@ -165,7 +216,6 @@ class PqToolkitAPIClient:
         Raises:
             PqExperimentAlreadyExistsException: If the experiment of given name already exists.
         """
-
         response = self._post(f"/experiments", json={"name": f"{experiment_name}"})
         match response.status_code:
             case 200:
@@ -173,6 +223,10 @@ class PqToolkitAPIClient:
                 return experiments
             case 409:
                 raise PqExperimentAlreadyExistsException(experiment_name=experiment_name)
+            case 401:
+                raise NotAuthorisedError()
+            case _:
+                raise DetailedError(response.json())
 
     def delete_experiment(self, *, experiment_name: str) -> list[str]:
         """
@@ -190,6 +244,12 @@ class PqToolkitAPIClient:
             case 200:
                 experiments = response.json().get("experiments")
                 return experiments
+            case 401:
+                raise NotAuthorisedError()
+            case 404:
+                pass
+            case _:
+                raise DetailedError(response.json())
 
     def setup_experiment(self, *, experiment_name: str, experiment_setup: PqExperiment):
         """
@@ -218,6 +278,10 @@ class PqToolkitAPIClient:
             case 400:
                 message = response.json().get("message")
                 raise PqExperimentSetupException(experiment_name=experiment_name, message=message)
+            case 401:
+                raise NotAuthorisedError()
+            case _:
+                raise DetailedError(response.json())
 
     def upload_sample(self, *, experiment_name: str, sample_name: str, sample_binary: bytes | BinaryIO):
         """
@@ -244,6 +308,10 @@ class PqToolkitAPIClient:
                 message = response.json().get("message")
                 raise PqExperimentSampleUploadException(experiment_name=experiment_name, sample_name=sample_name,
                                                         message=message)
+            case 401:
+                raise NotAuthorisedError()
+            case _:
+                raise DetailedError(response.json())
 
     def get_experiment_results(self, *, experiment_name: str) -> list[str]:
         """
@@ -281,3 +349,7 @@ class PqToolkitAPIClient:
                 return experiment_results
             case 404:
                 return None
+            case 401:
+                raise NotAuthorisedError()
+            case _:
+                raise DetailedError(response.json())
