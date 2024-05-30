@@ -79,8 +79,7 @@ Basic structure:
 - `doc` - generated documentation for schemas, must be generated first using `npm run build-docs`
 - `public` - static assets
 - `src`
-  - `app` - app router, contains all routes (api and frontend)
-    - `api` - api routes for backend functionality
+  - `app` - app router, contains all routes
     - other - frontend routes
   - `core` - core functionality, e.g. api handlers, global components
   - `lib` - all components, schemas used in app
@@ -106,15 +105,11 @@ inability to test audio in Jest (and handling audio is main scope of this projec
 ## TypeDoc
 
 There is TypeDoc documentation available for experiment schemas.
-It has to be build by running `npm run build-docs`, then it's available
+It has to be built by running `npm run build-docs`, then it's available
 in `doc` directory.
 
-Documentation describes all types needed to setup experiment and save results.
+Documentation describes all types needed to set up experiment and save results.
 Tooltip hints are also available in compatible IDEs.
-
-## SwaggerUI
-
-For API endpoints documentation start the service and visit the `/api/v1/api-docs` endpoint.
 
 ## Development guide
 
