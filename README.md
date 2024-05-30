@@ -81,25 +81,17 @@ Potential improvements:
 ## WIMU-24L notes (to change)
 
 Changes regarding design proposal:
-- xml files, xmlbuilder2 -> json files + zod validation
+- ?
 
 Known issues:
-- crude UI
-- missing feedback components (e.g. comment for each sample)
+- ?
 
 Potential improvements:
-- authorization for admin endpoints/panel
-- better UI
-- more options for test configurations (new tests or more helper components like feedback fields)
-- separate backend for data handling, storage on larger scale (relational database)
-- automatic mkdocs deployment
-
-Project was on schedule up to Christmas, then slight delays in finishing remaining test types
-and polishing features.
+- ?
 
 ## ZPRP-24L notes
 
 Known issues:
-
+- Feedback is not included in test results
 
 The project progressed on schedule with minor delays while connecting the backend to the frontend. However, in the end, the project was completed only with a delay of a few days. Which is still before the deadline
